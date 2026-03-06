@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: AI Quiz Generator Infrastructure
+
+Parameters:
+  GeminiApiKey:
+    Type: String
+    Description: "API Key for Google Gemini API"
+    NoEcho: true
+
+Resources:
+  # DynamoDB Table for Questions
+  QuestionsTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey:
+        Name: QuestionId
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+
+  # DynamoDB Table for Answer History
+  AnswerHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: UserId
+          AttributeType: S
+        - AttributeName: QuestionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: UserId
+          KeyType: HASH
+        - AttributeName: QuestionId
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+
+  # Lambda Function
+  QuizGeneratorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.9
+      Timeout: 60
+      Environment:
+        Variables:
+          GEMINI_API_KEY: !Ref GeminiApiKey
+          SYSTEM_PROMPT: "一般常識に関する面白いクイズを生成してください。"
+          QUESTION_COUNT: "10"
+          QUESTIONS_TABLE: !Ref QuestionsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref QuestionsTable
+      Events:
+        WeeklySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 0 ? * MON *) # 毎週月曜 0:00 (UTC)
+
+Outputs:
+  QuestionsTableName:
+    Description: "Questions DynamoDB Table Name"
+    Value: !Ref QuestionsTable
+  QuizGeneratorFunctionArn:
+    Description: "Lambda Function ARN"
+    Value: !GetAtt QuizGeneratorFunction.Arn

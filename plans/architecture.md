@@ -9,7 +9,7 @@
     - 無料枠が非常に広く、個人の開発や小規模運用であればコストをほぼゼロに抑えることが可能です。
     - 高速なレスポンスと十分なコンテキストウィンドウを持ち、多言語（日本語）対応も優れています。
 - **活用方法:**
-    - プロンプトにて「週に1回、10問のクイズをJSON形式で出力する」よう指定します。
+    - プロンプトにて「週に1回、指定された問題数のクイズをJSON形式で出力する」よう指定します。
 
 ## 2. スケジューリングと実行環境
 
@@ -21,8 +21,9 @@
 - **役割:** メインロジックの実行。
 - **処理フロー:**
     1. EventBridgeから起動。
-    2. Gemini APIを呼び出し、10問の新しい問題を生成。
-    3. 生成された問題をパースし、DynamoDBに一括保存（BatchWriteItem）。
+    2. 環境変数からシステムプロンプトと生成問題数を取得。
+    3. Gemini APIを呼び出し、新しい問題を生成。
+    4. 生成された問題をパースし、DynamoDBに一括保存（BatchWriteItem）。
 
 ## 3. データベース設計 (Amazon DynamoDB)
 
@@ -45,7 +46,19 @@ AWSの無期限無料枠（25GB）を活用し、以下の2つのテーブルを
 | `ReactionTime` | Number | リアクション日時 (Unix Timestamp) |
 | `ReactionType` | String | リアクションの内容（例: 正解、不正解、スタンプ等） |
 
-## 4. 実現可能性と実装のポイント
+## 4. 運用の柔軟性（環境変数の活用）
+
+再デプロイを不要にするため、以下の設定をLambdaの環境変数として管理します。
+- `GEMINI_API_KEY`: APIキー
+- `SYSTEM_PROMPT`: AIへの命令文（問題のジャンルや形式の指定）
+- `QUESTION_COUNT`: 1回のリクエストで生成する問題数
+- `QUESTIONS_TABLE`: 保存先テーブル名
+
+## 5. インフラ構成 (Infrastructure as Code)
+
+AWS SAM (Serverless Application Model) を用いて、サーバーレスリソースを定義します。詳細は `plans/template.yaml` を参照してください。
+
+## 6. 実現可能性と実装のポイント
 
 ### 実現可能性
 - **コスト:** Gemini 1.5 Flashの無料枠とAWSの無料枠（Lambda, DynamoDB, EventBridge）を組み合わせることで、月額コストほぼ0円での運用が十分に可能です。
@@ -53,7 +66,6 @@ AWSの無期限無料枠（25GB）を活用し、以下の2つのテーブルを
 
 ### 実装のステップ
 1. **Google AI Studio**でAPIキーを取得。
-2. **AWS Lambda**でGemini APIを叩くためのコード（PythonやNode.js）を作成。
-3. **DynamoDB**テーブルを作成。
-4. **EventBridge**でスケジュールを設定。
-5. LambdaからDynamoDBへの書き込み権限（IAM Role）を設定。
+2. **AWS SAM**を使用してインフラ一式（Lambda, DynamoDB, EventBridge）をデプロイ。
+3. **Lambdaコンソール**またはCLIから環境変数を設定。
+4. 動作確認。
